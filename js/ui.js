@@ -15,7 +15,8 @@ class UIManager {
       playerName: document.getElementById('input-player-name'),
       roomCode: document.getElementById('input-room-code'),
       turnDuration: document.getElementById('select-turn-duration'),
-      maxPlayers: document.getElementById('select-max-players')
+      maxPlayers: document.getElementById('select-max-players'),
+      signalingUrl: document.getElementById('input-signaling-url')
     };
 
     this.buttons = {
@@ -24,7 +25,10 @@ class UIManager {
       copyLink: document.getElementById('btn-copy-link'),
       startGame: document.getElementById('btn-start-game'),
       nextRound: document.getElementById('btn-next-round'),
-      soundToggle: document.getElementById('btn-sound-toggle')
+      soundToggle: document.getElementById('btn-sound-toggle'),
+      settingsToggle: document.getElementById('btn-settings-toggle'),
+      saveSignalingUrl: document.getElementById('btn-save-signaling-url'),
+      closeSignalingSettings: document.getElementById('btn-close-signaling-settings')
     };
 
     this.displays = {
@@ -45,6 +49,7 @@ class UIManager {
       modalWinnerDesc: document.getElementById('modal-winner-desc'),
       modalScoresList: document.getElementById('modal-scores-list'),
       waitNextRoundText: document.getElementById('wait-next-round-text'),
+      modalSignalingSettings: document.getElementById('modal-signaling-settings'),
       toastContainer: document.getElementById('toast-container'),
       soundIcon: document.getElementById('sound-icon'),
       btnStartGame: document.getElementById('btn-start-game'),
@@ -70,7 +75,7 @@ class UIManager {
     });
   }
 
-  showToast(message, duration = 3500) {
+  showToast(message, duration = 4000) {
     const toast = document.createElement('div');
     toast.className = 'toast';
     toast.textContent = message;
@@ -275,6 +280,15 @@ class UIManager {
 
   hideRoundEndModal() {
     this.displays.modalRoundEnd.classList.remove('active');
+  }
+
+  showSignalingSettingsModal(currentUrl) {
+    this.inputs.signalingUrl.value = currentUrl || '';
+    this.displays.modalSignalingSettings.classList.add('active');
+  }
+
+  hideSignalingSettingsModal() {
+    this.displays.modalSignalingSettings.classList.remove('active');
   }
 }
 

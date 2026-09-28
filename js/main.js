@@ -23,19 +23,31 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.inputs.playerName.value = game.localPlayerName;
   }
 
-  // Verificar se há código de sala na URL (?room=ABC123)
-  const urlParams = new URLSearchParams(window.location.search);
-  const roomParam = urlParams.get('room');
-  if (roomParam) {
-    ui.inputs.roomCode.value = roomParam.toUpperCase();
-    ui.showToast(`Sala ${roomParam.toUpperCase()} detectada no link! Insira seu nome e clique em Entrar.`);
-  }
-
-  // --- CONFIGURAÇÃO E EVENTOS DO ÁUDIO ---
+  // --- CONFIGURAÇÃO E EVENTOS DO ÁUDIO E SERVIDOR ---
   ui.buttons.soundToggle.addEventListener('click', () => {
     const enabled = audioManager.toggleSound();
     ui.displays.soundIcon.textContent = enabled ? '🔊' : '🔇';
     ui.showToast(enabled ? 'Sons ativados' : 'Sons desativados');
+  });
+
+  ui.buttons.settingsToggle.addEventListener('click', () => {
+    ui.showSignalingSettingsModal(getSignalingUrl());
+  });
+
+  ui.buttons.closeSignalingSettings.addEventListener('click', () => {
+    ui.hideSignalingSettingsModal();
+  });
+
+  ui.buttons.saveSignalingUrl.addEventListener('click', () => {
+    const url = ui.inputs.signalingUrl.value.trim();
+    if (url) {
+      setSignalingUrl(url);
+      ui.showToast(`URL do Servidor salva: ${url}`);
+    } else {
+      setSignalingUrl('');
+      ui.showToast('Restaurada URL padrão do servidor de sinalização');
+    }
+    ui.hideSignalingSettingsModal();
   });
 
   // --- REGRAS E AÇÕES DE NOME E INPUTS ---
@@ -182,15 +194,14 @@ document.addEventListener('DOMContentLoaded', () => {
       initPeerManager(data.roomId);
 
       ui.showToast(`Entrou na sala ${data.roomId}. Conectando ao host...`);
-      // Iniciar oferta WebRTC com o Host da sala
+      // O cliente que entra é o único responsável por iniciar a oferta WebRTC com o Host
       peerManager.createPeerConnection(data.hostId, true);
     });
 
     signaling.on('player-joined', (data) => {
       if (game.isHost) {
         game.hostAddPlayer(data.playerId, data.name);
-        // Estabelecer conexão WebRTC P2P com o jogador que entrou
-        peerManager.createPeerConnection(data.playerId, true);
+        // O Host apenas registra o jogador e aguarda a oferta WebRTC vinda do cliente
       }
     });
 
@@ -216,17 +227,65 @@ document.addEventListener('DOMContentLoaded', () => {
       ui.showToast(`O Host saiu! Novo host promovido: ${data.newHostName}`);
       if (data.newHostId === game.localPlayerId) {
         game.isHost = true;
-        // Atualizar estado de isHost no array de jogadores local
+        // Atualizar estado de isHost localmente
         game.state.players.forEach(p => {
           p.isHost = (p.id === game.localPlayerId);
         });
         game._notifyStateChange();
+
+        // Re-estabelecer malha de conexões P2P com todos os jogadores restantes na sala
+        if (peerManager) {
+          game.state.players.forEach(p => {
+            if (p.id !== game.localPlayerId && p.connected) {
+              peerManager.createPeerConnection(p.id, true);
+            }
+          });
+        }
       }
     });
 
     signaling.on('error', (data) => {
-      ui.showToast(`Erro: ${data.message || 'Falha de sinalização'}`);
+      ui.showToast(`Erro de Sinalização: ${data.message || 'Falha de sinalização'}`);
+      if (data.isConnectionError) {
+        ui.showSignalingSettingsModal(getSignalingUrl());
+      }
     });
+  }
+
+  // --- FUNÇÃO PARA CONECTAR E ENTRAR EM UMA SALA ---
+  async function joinExistingRoom(roomId, playerName) {
+    if (!playerName || !roomId) return;
+    game.setPlayerName(playerName);
+
+    try {
+      if (!signaling) {
+        signaling = new SignalingClient();
+        initSignalingHandlers();
+      }
+      if (!signaling.isConnected) {
+        await signaling.connect();
+      }
+      signaling.joinRoom(roomId, game.localPlayerId, game.localPlayerName);
+    } catch (e) {
+      ui.showToast('Erro ao conectar com o servidor de sinalização. Clique em ⚙️ para configurar.');
+      ui.showSignalingSettingsModal(getSignalingUrl());
+    }
+  }
+
+  // Verificar se há código de sala na URL (?room=ABC123)
+  const urlParams = new URLSearchParams(window.location.search);
+  const roomParam = urlParams.get('room');
+  if (roomParam) {
+    const cleanRoomCode = roomParam.toUpperCase();
+    ui.inputs.roomCode.value = cleanRoomCode;
+    ui.showToast(`Sala ${cleanRoomCode} detectada no link! Insira seu nome e clique em Entrar.`);
+
+    // Tentar reconexão/entrada automática se o nome do jogador já estiver salvo
+    if (game.localPlayerName && game.localPlayerName !== 'Jogador') {
+      setTimeout(() => {
+        joinExistingRoom(cleanRoomCode, game.localPlayerName);
+      }, 500);
+    }
   }
 
   // --- BOTÕES DE AÇÃO ---
@@ -249,7 +308,8 @@ document.addEventListener('DOMContentLoaded', () => {
       await signaling.connect();
       signaling.createRoom(roomId, game.localPlayerId, game.localPlayerName, parseInt(ui.inputs.maxPlayers.value));
     } catch (e) {
-      ui.showToast('Não foi possível conectar ao servidor de sinalização.');
+      ui.showToast('Não foi possível conectar ao servidor de sinalização. Clique em ⚙️ para configurar.');
+      ui.showSignalingSettingsModal(getSignalingUrl());
     }
   });
 
@@ -269,16 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    game.setPlayerName(name);
-
-    try {
-      signaling = new SignalingClient();
-      initSignalingHandlers();
-      await signaling.connect();
-      signaling.joinRoom(roomId, game.localPlayerId, game.localPlayerName);
-    } catch (e) {
-      ui.showToast('Erro ao conectar com o servidor de sinalização.');
-    }
+    joinExistingRoom(roomId, name);
   });
 
   // 3. COPIAR LINK DE CONVITE

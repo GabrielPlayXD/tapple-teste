@@ -2,15 +2,34 @@
  * Cliente de Sinalização WebSocket para o GiraLetras.
  */
 
-// URL do servidor de sinalização centralizada.
-// Padrão local: ws://localhost:8080
-// Para produção (Render/Fly.io/etc): altere para wss://seu-servidor.example.com
-const SIGNALING_SERVER_URL = typeof window !== 'undefined' && window.LOCATION_SIGNALING_URL
-  ? window.LOCATION_SIGNALING_URL
-  : 'ws://localhost:8080';
+function getSignalingUrl() {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const saved = localStorage.getItem('giraletras_signaling_url');
+    if (saved && saved.trim()) {
+      return saved.trim();
+    }
+  }
+
+  if (typeof window !== 'undefined' && window.LOCATION_SIGNALING_URL) {
+    return window.LOCATION_SIGNALING_URL;
+  }
+
+  // Padrão
+  return 'ws://localhost:8080';
+}
+
+function setSignalingUrl(url) {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    if (url && url.trim()) {
+      localStorage.setItem('giraletras_signaling_url', url.trim());
+    } else {
+      localStorage.removeItem('giraletras_signaling_url');
+    }
+  }
+}
 
 class SignalingClient {
-  constructor(serverUrl = SIGNALING_SERVER_URL) {
+  constructor(serverUrl = getSignalingUrl()) {
     this.serverUrl = serverUrl;
     this.socket = null;
     this.handlers = new Map();
@@ -20,6 +39,14 @@ class SignalingClient {
   connect() {
     return new Promise((resolve, reject) => {
       try {
+        // Verificar restrição HTTPS (Mixed Content)
+        if (typeof window !== 'undefined' && window.location.protocol === 'https:' && this.serverUrl.startsWith('ws://')) {
+          const isLocal = this.serverUrl.includes('localhost') || this.serverUrl.includes('127.0.0.1');
+          if (!isLocal) {
+            console.warn('[Signaling] Conexão ws:// não criptografada tentada em página https://');
+          }
+        }
+
         this.socket = new WebSocket(this.serverUrl);
 
         this.socket.onopen = () => {
@@ -33,8 +60,12 @@ class SignalingClient {
         };
 
         this.socket.onerror = (err) => {
-          console.error('[Signaling] Erro na conexão:', err);
-          this.emit('error', { message: 'Erro na conexão WebSocket com servidor de sinalização.' });
+          console.error('[Signaling] Erro na conexão com:', this.serverUrl, err);
+          let errorMsg = `Não foi possível conectar ao servidor de sinalização (${this.serverUrl}).`;
+          if (typeof window !== 'undefined' && window.location.protocol === 'https:' && this.serverUrl.startsWith('ws://')) {
+            errorMsg += ' Navegadores bloqueiam conexões ws:// não seguras a partir de páginas HTTPS. Use wss://.';
+          }
+          this.emit('error', { message: errorMsg, isConnectionError: true });
           reject(err);
         };
 
@@ -44,6 +75,8 @@ class SignalingClient {
           this.emit('disconnected');
         };
       } catch (e) {
+        let errorMsg = `Erro ao inicializar WebSocket com ${this.serverUrl}: ${e.message}`;
+        this.emit('error', { message: errorMsg, isConnectionError: true });
         reject(e);
       }
     });
@@ -148,5 +181,5 @@ class SignalingClient {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { SignalingClient, SIGNALING_SERVER_URL };
+  module.exports = { SignalingClient, getSignalingUrl, setSignalingUrl };
 }
