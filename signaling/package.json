@@ -1,0 +1,12 @@
+{
+  "name": "giraletras-signaling-server",
+  "version": "1.0.0",
+  "description": "Servidor de sinalização WebSocket para o jogo GiraLetras",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

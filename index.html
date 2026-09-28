@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>GiraLetras — Jogo de Palavras Multiplayer em Tempo Real</title>
+  <meta name="description" content="Jogo de palavras multiplayer original, em tempo real via WebRTC P2P com teclado circular e categorias.">
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Outfit:wght@400;500;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <div class="app-container">
+
+    <!-- CABEÇALHO GLOBAL -->
+    <header class="app-header">
+      <div class="logo-area">
+        <span class="logo-icon">🎡</span>
+        <h1 class="logo-title">Gira<span class="highlight">Letras</span></h1>
+      </div>
+      <div class="header-controls">
+        <button id="btn-sound-toggle" class="icon-btn" title="Alternar som" aria-label="Alternar som">
+          <span id="sound-icon">🔊</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- TELA 1: LANDING / ENTRADA -->
+    <section id="screen-landing" class="screen active">
+      <div class="hero-card">
+        <h2>Desafie seus amigos em tempo real!</h2>
+        <p class="subtitle">Escolha uma categoria, gire o teclado e não deixe o tempo esgotar!</p>
+
+        <div class="form-group">
+          <label for="input-player-name">Seu Nome / Apelido:</label>
+          <input type="text" id="input-player-name" placeholder="Digite seu nome..." maxlength="20" autocomplete="off">
+        </div>
+
+        <div class="action-buttons">
+          <button id="btn-create-room" class="btn btn-primary btn-lg">
+            <span class="btn-icon">➕</span> Criar Nova Sala
+          </button>
+
+          <div class="divider"><span>ou</span></div>
+
+          <div class="join-box">
+            <input type="text" id="input-room-code" placeholder="CÓDIGO (ex: ABC123)" maxlength="10" style="text-transform: uppercase;">
+            <button id="btn-join-room" class="btn btn-secondary btn-lg">
+              Entrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TELA 2: LOBBY DE ESPERA -->
+    <section id="screen-lobby" class="screen">
+      <div class="lobby-card">
+        <div class="lobby-header">
+          <h2>Sala de Espera</h2>
+          <div class="room-code-badge">
+            <span>CÓDIGO:</span>
+            <strong id="lobby-room-code">------</strong>
+            <button id="btn-copy-link" class="btn btn-sm btn-outline" title="Copiar link de convite">
+              📋 Copiar Link
+            </button>
+          </div>
+        </div>
+
+        <div class="lobby-content">
+          <div class="players-section">
+            <div class="section-title">
+              <h3>Jogadores Conectados</h3>
+              <span id="lobby-player-count" class="badge">0 / 8</span>
+            </div>
+            <ul id="lobby-players-list" class="players-list">
+              <!-- Renderizado dinamicamente -->
+            </ul>
+          </div>
+
+          <!-- Configurações (Apenas visível ou editável pelo Host) -->
+          <div id="host-settings-panel" class="settings-panel">
+            <h3>Configurações da Partida</h3>
+            <div class="setting-item">
+              <label for="select-turn-duration">Tempo por turno:</label>
+              <select id="select-turn-duration" class="form-control">
+                <option value="5">5 segundos (Acelerado)</option>
+                <option value="10" selected>10 segundos (Padrão)</option>
+                <option value="15">15 segundos (Tranquilo)</option>
+              </select>
+            </div>
+
+            <div class="setting-item">
+              <label for="select-max-players">Limite de Jogadores:</label>
+              <select id="select-max-players" class="form-control">
+                <option value="2">2 Jogadores</option>
+                <option value="4">4 Jogadores</option>
+                <option value="6">6 Jogadores</option>
+                <option value="8" selected>8 Jogadores</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="lobby-actions">
+          <button id="btn-start-game" class="btn btn-primary btn-xl" disabled>
+            🚀 Iniciar Partida
+          </button>
+          <p id="host-start-hint" class="hint-text">Aguardando o host iniciar a partida...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TELA 3: TELA DO JOGO / TECLADO CIRCULAR -->
+    <section id="screen-game" class="screen">
+      <div class="game-layout">
+
+        <!-- BARRA LATERAL DA ESQUERDA: PLACAR -->
+        <aside class="sidebar-scoreboard">
+          <div class="sidebar-header">
+            <h3>Placar <span id="round-badge" class="badge-round">R1</span></h3>
+          </div>
+          <div id="scoreboard-list" class="scoreboard-list">
+            <!-- Jogadores e pontuações -->
+          </div>
+        </aside>
+
+        <!-- ÁREA CENTRAL DO JOGO -->
+        <main class="game-main">
+
+          <!-- BANNER DE STATUS E TURNO -->
+          <div class="turn-banner" id="turn-banner">
+            <span class="turn-label">É A VEZ DE:</span>
+            <strong id="current-player-name">--</strong>
+          </div>
+
+          <!-- TECLADO CIRCULAR INTERATIVO -->
+          <div class="circular-keyboard-wrapper">
+            <div id="circular-keyboard" class="circular-keyboard">
+
+              <!-- CENTRO DO TECLADO: CRONÔMETRO E CATEGORIA -->
+              <div class="keyboard-center">
+                <div class="category-box">
+                  <span class="category-label">CATEGORIA</span>
+                  <div id="game-category-text" class="category-text">Carregando...</div>
+                </div>
+
+                <div id="timer-display" class="timer-display">
+                  <span id="timer-seconds">10</span>
+                  <small>s</small>
+                </div>
+              </div>
+
+              <!-- BOTÕES DAS LETRAS (Gerados em JS) -->
+              <div id="letters-container" class="letters-container"></div>
+
+            </div>
+          </div>
+
+        </main>
+      </div>
+    </section>
+
+    <!-- MODAL DE FIM DE RODADA / VITORIA -->
+    <div id="modal-round-end" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-icon">🏆</div>
+        <h2 id="modal-winner-title">GABRIEL VENCEU A RODADA!</h2>
+        <p id="modal-winner-desc">Sua agilidade em palavras superou os oponentes.</p>
+
+        <div class="modal-scoreboard">
+          <h3>Classificação Atual</h3>
+          <div id="modal-scores-list" class="modal-scores-list"></div>
+        </div>
+
+        <div class="modal-actions">
+          <button id="btn-next-round" class="btn btn-primary btn-lg" style="display: none;">
+            🔄 Próxima Rodada
+          </button>
+          <p id="wait-next-round-text" class="hint-text">Aguardando o host iniciar a próxima rodada...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOAST DE NOTIFICAÇÕES -->
+    <div id="toast-container" class="toast-container"></div>
+
+  </div>
+
+  <!-- DEPENDÊNCIAS JAVASCRIPT -->
+  <script src="js/categories.js"></script>
+  <script src="js/protocol.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/signaling.js"></script>
+  <script src="js/webrtc.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
